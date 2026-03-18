@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>高さ推定ツール（完全Web版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { font-family: sans-serif; margin: 10px; }
+canvas { width: 100%; max-height: 60vh; border: 1px solid #999; touch-action: none; }
+label { display:block; margin-top:6px; }
+button { width:100%; padding:10px; margin-top:6px; font-size:16px; }
+#status { margin-top:8px; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<h2>高さ推定ツール（Python完全一致Web版）</h2>
+
+<input type="file" id="fileInput" accept="image/*">
+
+<canvas id="canvas"></canvas>
+
+<label>
+対象モード
+<select id="mode">
+  <option value="cable">ケーブル高さ</option>
+  <option value="pole">電柱高さ</option>
+</select>
+</label>
+
+<label>撮影距離 (m)<input id="distance" type="number" value="10"></label>
+<label>焦点距離 (mm)<input id="focal" type="number" value="4.25"></label>
+<label>センサー高さ (mm)<input id="sensorH" type="number" value="7.2"></label>
+<label>カメラ傾き (°)<input id="pitch" type="number" value="0"></label>
+
+<button id="calcBtn">高さを計算</button>
+<button id="refBtn">参照物で校正（橙2点）</button>
+<button id="resetBtn">リセット</button>
+
+<div id="status">① 画像を選択してください</div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+let img = new Image();
+let clicks = [], refClicks = [];
+let scale = 1;
+let calScale = 1.0, calBias = 0.0;
+let refMode = false;
+
+function resize() {
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+}
+
+document.getElementById("fileInput").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    img.onload = () => {
+      resize();
+      draw();
+      document.getElementById("status").textContent = "② 対象の上下2点をタップ";
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(f);
+};
+
+function draw() {
+  clicks=[]; refClicks=[];
+  const r = Math.min(canvas.width/img.width, canvas.height/img.height);
+  scale = r;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(img,0,0,img.width*r,img.height*r);
+}
+
+canvas.onclick = e => {
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX-rect.left)/scale;
+  const y = (e.clientY-rect.top)/scale;
+  const arr = refMode ? refClicks : clicks;
+  if (arr.length>=2) return;
+  arr.push({x,y});
+  ctx.fillStyle = refMode?"orange":"red";
+  ctx.beginPath();
+  ctx.arc(x*scale,y*scale,5,0,Math.PI*2);
+  ctx.fill();
+};
+
+function heightFOV(pts) {
+  const d=+distance.value,f=+focal.value,sH=+sensorH.value,p=+pitch.value*Math.PI/180;
+  const w=img.width,h=img.height,cy=h/2,mmpp=sH/h;
+  const th=y=>Math.atan(((y-cy)*mmpp)/f);
+  let t1=th(pts[0].y)-p,t2=th(pts[1].y)-p;
+  return Math.abs(d*(Math.tan(t1)-Math.tan(t2)));
+}
+
+calcBtn.onclick=()=>{
+  if(clicks.length<2)return;
+  let h=heightFOV(clicks);
+  h=calScale*h+calBias;
+  status.textContent=`推定高さ：${h.toFixed(2)} m`;
+};
+
+refBtn.onclick=()=>{
+  refMode=true;
+  status.textContent="参照物の上下2点をタップ";
+  setTimeout(()=>{
+    if(refClicks.length<2){refMode=false;return;}
+    const Htrue=prompt("参照物の実高さ(m)");
+    if(!Htrue){refMode=false;return;}
+    const Hcalc=heightFOV(refClicks);
+    calScale=Htrue/Hcalc; calBias=0;
+    status.textContent=`校正完了 cal_scale=${calScale.toFixed(4)}`;
+    refMode=false;
+  },500);
+};
+
+resetBtn.onclick=()=>{
+  draw();
+  calScale=1;calBias=0;
+  status.textContent="② 対象の上下2点をタップ";
+};
+</script>
+
+</body>
+</html>
+``
