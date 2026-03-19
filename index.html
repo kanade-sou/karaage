@@ -35,7 +35,12 @@ button,input{
 .primary{background:#2563eb;color:#fff;font-weight:bold;}
 .ok{color:#16a34a;}
 .ng{color:#dc2626;}
-small{color:#4b5563;}
+.option{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:6px;
+}
 </style>
 </head>
 
@@ -51,13 +56,19 @@ small{color:#4b5563;}
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
 
-  <!-- ✅ 撮影距離（追加・必須ではない） -->
+  <!-- ✅ 撮影距離 -->
   <input type="number" id="shootDist" placeholder="撮影距離（m・任意）" step="0.1">
 
-  <!-- ✅ 参照物の実寸（従来どおり） -->
+  <!-- ✅ 参照物の実寸 -->
   <input type="number" id="refLen" value="100" placeholder="参照物の高さ（cm）">
 
-  <!-- ✅ 参照物指定操作は変更なし -->
+  <!-- ✅ 垂直スナップ -->
+  <div class="option">
+    <input type="checkbox" id="snapVertical" checked>
+    <label for="snapVertical">垂直スナップを有効にする</label>
+  </div>
+
+  <!-- ✅ 参照物指定（操作デザイン維持） -->
   <button id="refBtn" class="refbtn">参照物を指定</button>
   <button id="calcBtn" class="primary">計算</button>
 
@@ -70,6 +81,7 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const status = document.getElementById("status");
 const result = document.getElementById("result");
+const snapCheckbox = document.getElementById("snapVertical");
 
 let img = new Image();
 let scale = 1;
@@ -81,6 +93,7 @@ let refPoints = [];
 let refMode = false;
 
 let lastTouches = [];
+let moved = false;
 
 /* ===== DPR対応 ===== */
 function resize(){
@@ -124,14 +137,25 @@ function getPos(x,y){
   };
 }
 
-/* ===== タッチ操作（変更なし） ===== */
+/* ===== 垂直スナップ ===== */
+function applyVerticalSnap(arr){
+  if(arr.length===2 && snapCheckbox.checked){
+    const x = (arr[0].x + arr[1].x) / 2;
+    arr[0].x = x;
+    arr[1].x = x;
+  }
+}
+
+/* ===== タッチ操作 ===== */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
   lastTouches = [...e.touches];
+  moved = false;
 });
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
+  moved = true;
 
   if(e.touches.length===2 && lastTouches.length===2){
     const [a,b] = e.touches;
@@ -149,17 +173,19 @@ canvas.addEventListener("touchmove",e=>{
 });
 
 canvas.addEventListener("touchend",e=>{
-  if(e.changedTouches.length===1 && lastTouches.length===0){
+  if(!moved && e.changedTouches.length===1){
     const t = e.changedTouches[0];
     const p = getPos(t.clientX,t.clientY);
     const arr = refMode ? refPoints : points;
 
     if(arr.length < 2){
       arr.push(p);
+      applyVerticalSnap(arr);
 
       if(refMode && refPoints.length===2){
         refMode = false;
-        status.textContent = "参照物設定完了。次に測定対象を指定してください。";
+        status.textContent =
+          "参照物設定完了。次に測定対象を指定してください。";
       }
     }
     draw();
@@ -176,13 +202,15 @@ refBtn.onclick = ()=>{
 
 calcBtn.onclick = ()=>{
   if(refPoints.length!==2 || points.length!==2){
-    result.innerHTML = "<span class='ng'>参照物と測定対象を指定してください</span>";
+    result.innerHTML =
+      "<span class='ng'>参照物と測定対象を指定してください</span>";
     return;
   }
 
   const refCm = Number(refLen.value);
   if(!refCm || refCm<=0){
-    result.innerHTML = "<span class='ng'>参照物の高さ(cm)を入力してください</span>";
+    result.innerHTML =
+      "<span class='ng'>参照物の高さ(cm)を入力してください</span>";
     return;
   }
 
@@ -190,14 +218,14 @@ calcBtn.onclick = ()=>{
             Math.abs(refPoints[1].y - refPoints[0].y) *
             refCm;
 
-  const dist = shootDist.value
+  const distText = shootDist.value
     ? `（撮影距離：約${shootDist.value} m）`
     : "";
 
   result.innerHTML = `
     <span class="ok">
       推定高さ ${h.toFixed(1)} cm<br>
-      <small>${dist}</small>
+      <small>${distText}</small>
     </span>`;
 };
 
