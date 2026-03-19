@@ -35,6 +35,7 @@ button,input{
 .primary{background:#2563eb;color:#fff;font-weight:bold;}
 .ok{color:#16a34a;}
 .ng{color:#dc2626;}
+small{color:#4b5563;}
 </style>
 </head>
 
@@ -49,9 +50,17 @@ button,input{
 
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
+
+  <!-- ✅ 撮影距離（追加・必須ではない） -->
+  <input type="number" id="shootDist" placeholder="撮影距離（m・任意）" step="0.1">
+
+  <!-- ✅ 参照物の実寸（従来どおり） -->
   <input type="number" id="refLen" value="100" placeholder="参照物の高さ（cm）">
+
+  <!-- ✅ 参照物指定操作は変更なし -->
   <button id="refBtn" class="refbtn">参照物を指定</button>
   <button id="calcBtn" class="primary">計算</button>
+
   <div id="status"></div>
   <div id="result"></div>
 </div>
@@ -115,7 +124,7 @@ function getPos(x,y){
   };
 }
 
-/* ===== タッチ操作 ===== */
+/* ===== タッチ操作（変更なし） ===== */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
   lastTouches = [...e.touches];
@@ -181,7 +190,15 @@ calcBtn.onclick = ()=>{
             Math.abs(refPoints[1].y - refPoints[0].y) *
             refCm;
 
-  result.innerHTML = `<span class="ok">推定高さ ${h.toFixed(1)} cm</span>`;
+  const dist = shootDist.value
+    ? `（撮影距離：約${shootDist.value} m）`
+    : "";
+
+  result.innerHTML = `
+    <span class="ok">
+      推定高さ ${h.toFixed(1)} cm<br>
+      <small>${dist}</small>
+    </span>`;
 };
 
 /* ===== 画像読み込み ===== */
@@ -202,4 +219,3 @@ fileInput.onchange = e=>{
 
 </body>
 </html>
-``
