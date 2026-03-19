@@ -48,7 +48,6 @@ button,input,select{
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
 
-  <!-- ✅ 機種選択（復活） -->
   <select id="deviceSelect">
     <option value="">機種を選択（任意）</option>
     <option value="iphone">iPhone</option>
@@ -97,7 +96,7 @@ let startTouches = [];
 let tapStart = null;
 let moved = false;
 
-/* ===== canvas（論理座標のみ） ===== */
+/* ===== canvas ===== */
 function resize(){
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
@@ -116,6 +115,9 @@ function draw(){
 
   drawLine(refPoints,"#f59e0b");
   drawLine(points,"#dc2626");
+
+  drawPoints(refPoints,"#f59e0b");
+  drawPoints(points,"#dc2626");
 }
 
 function drawLine(arr,color){
@@ -127,6 +129,20 @@ function drawLine(arr,color){
     ctx.lineTo(arr[1].x,arr[1].y);
     ctx.stroke();
   }
+}
+
+/* ✅ 丸い点を描画 */
+function drawPoints(arr,color){
+  const r = 8 / scale;
+  arr.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,r,0,Math.PI*2);
+    ctx.fillStyle=color;
+    ctx.fill();
+    ctx.lineWidth=2/scale;
+    ctx.strokeStyle="#fff";
+    ctx.stroke();
+  });
 }
 
 /* ===== 座標変換 ===== */
@@ -161,19 +177,14 @@ canvas.addEventListener("touchmove",e=>{
   if(e.touches.length===2 && startTouches.length===2){
     const [a,b]=e.touches;
     const [a0,b0]=startTouches;
-
     const cx=(a.clientX+b.clientX)/2;
     const cy=(a.clientY+b.clientY)/2;
-
     const wx=(cx-offsetX)/scale;
     const wy=(cy-offsetY)/scale;
-
     const d0=Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
     const d1=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-
     scale*=d1/d0;
     scale=Math.min(Math.max(scale,0.2),10);
-
     offsetX=cx-wx*scale;
     offsetY=cy-wy*scale;
   }
@@ -226,17 +237,11 @@ calcBtn.onclick=()=>{
   result.innerHTML=`<span class="ok">推定高さ ${h.toFixed(1)} cm</span>`;
 };
 
-/* ===== リセット ===== */
 resetBtn.onclick=()=>{
   img.src="";
-  points=[];
-  refPoints=[];
-  refMode=false;
-  scale=1;
-  offsetX=0;
-  offsetY=0;
-  status.textContent="";
-  result.textContent="";
+  points=[];refPoints=[];refMode=false;
+  scale=1;offsetX=0;offsetY=0;
+  status.textContent="";result.textContent="";
   draw();
 };
 
@@ -260,3 +265,4 @@ fileInput.onchange=e=>{
 </script>
 </body>
 </html>
+``
