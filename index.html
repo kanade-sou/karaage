@@ -47,21 +47,28 @@ input,select,button{
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
 
+  <!-- ✅ iPhone 機種選択（Pro / Max / 無印 分離） -->
   <select id="device">
     <option value="">📱 iPhone機種を選択</option>
+
     <option value="ip17_pro">iPhone 17 Pro</option>
     <option value="ip17_max">iPhone 17 Pro Max</option>
     <option value="ip17">iPhone 17</option>
+
     <option value="ip16_pro">iPhone 16 Pro</option>
     <option value="ip16_max">iPhone 16 Pro Max</option>
     <option value="ip16">iPhone 16</option>
+
     <option value="ip15_pro">iPhone 15 Pro</option>
     <option value="ip15_max">iPhone 15 Pro Max</option>
     <option value="ip15">iPhone 15</option>
+
     <option value="ip14_pro">iPhone 14 Pro</option>
     <option value="ip14">iPhone 14</option>
+
     <option value="ip13_pro">iPhone 13 Pro</option>
     <option value="ip13">iPhone 13</option>
+
     <option value="ip12">iPhone 12</option>
     <option value="ipse">iPhone SE (第2・3世代)</option>
   </select>
@@ -80,43 +87,57 @@ input,select,button{
 </div>
 
 <script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
 
-let img = new Image();
-let scale = 1, offsetX = 0, offsetY = 0;
-let refPoints = [], cablePoints = [];
-let mode = "ref";
-let draggingPoint = null;
-let spiral = null;
+let img=new Image();
+let scale=1,offsetX=0,offsetY=0;
 
-/* === DPR対応（画質改善） === */
-function resize(){
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width  = rect.width  * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  draw();
-}
-window.addEventListener("resize", resize);
-resize();
+let refPoints=[], cablePoints=[];
+let mode="ref";
+let draggingPoint=null;
+let spiral=null;
 
-/* === カメラDB === */
+/* ✅ iPhoneカメラDB（Pro / Max / 無印を個別管理） */
 const cameraDB={
-  ip17_pro:{f:6.86,sensor:7.6}, ip17_max:{f:6.86,sensor:7.6}, ip17:{f:6.86,sensor:7.6},
-  ip16_pro:{f:6.86,sensor:7.6}, ip16_max:{f:6.86,sensor:7.6}, ip16:{f:6.86,sensor:7.6},
-  ip15_pro:{f:6.86,sensor:7.6}, ip15_max:{f:6.86,sensor:7.6}, ip15:{f:6.86,sensor:7.6},
-  ip14_pro:{f:6.86,sensor:7.6}, ip14:{f:6.86,sensor:7.6},
-  ip13_pro:{f:5.7,sensor:7.6}, ip13:{f:5.7,sensor:7.6},
-  ip12:{f:4.25,sensor:7.6}, ipse:{f:4.15,sensor:6.4}
+  ip17_pro:{f:6.86,sensor:7.6},
+  ip17_max:{f:6.86,sensor:7.6},
+  ip17:{f:6.86,sensor:7.6},
+
+  ip16_pro:{f:6.86,sensor:7.6},
+  ip16_max:{f:6.86,sensor:7.6},
+  ip16:{f:6.86,sensor:7.6},
+
+  ip15_pro:{f:6.86,sensor:7.6},
+  ip15_max:{f:6.86,sensor:7.6},
+  ip15:{f:6.86,sensor:7.6},
+
+  ip14_pro:{f:6.86,sensor:7.6},
+  ip14:{f:6.86,sensor:7.6},
+
+  ip13_pro:{f:5.7,sensor:7.6},
+  ip13:{f:5.7,sensor:7.6},
+
+  ip12:{f:4.25,sensor:7.6},
+  ipse:{f:4.15,sensor:6.4}
 };
 
-/* === 描画 === */
+function resize(){
+  canvas.width=canvas.clientWidth;
+  canvas.height=canvas.clientHeight;
+  draw();
+}
+window.addEventListener("resize",resize);
+resize();
+
+/* ===== 描画 ===== */
 function draw(){
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
+
   ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
   ctx.drawImage(img,0,0);
+
   drawLine(refPoints,"#f59e0b");
   drawLine(cablePoints,"#dc2626");
   drawPoints(refPoints,"#f59e0b");
@@ -136,7 +157,7 @@ function drawLine(arr,color){
 }
 
 function drawPoints(arr,color){
-  const r = 8/scale;
+  const r=8/scale;
   arr.forEach(p=>{
     ctx.beginPath();
     ctx.arc(p.x,p.y,r,0,Math.PI*2);
@@ -148,7 +169,7 @@ function drawPoints(arr,color){
   });
 }
 
-/* === らせん === */
+/* らせん演出 */
 function drawSpiral(){
   if(!spiral) return;
   const {x,y,t,color}=spiral;
@@ -165,23 +186,12 @@ function drawSpiral(){
   else spiral=null;
 }
 
-/* === 座標変換 === */
+/* 座標変換 */
 function screenToWorld(x,y){
   return {x:(x-offsetX)/scale,y:(y-offsetY)/scale};
 }
 
-/* === タップ吸着（±5px） === */
-function snapPoint(p){
-  const snap = 5;
-  for(const q of [...refPoints,...cablePoints]){
-    if(Math.hypot(p.x-q.x,p.y-q.y) < snap/scale){
-      return {x:q.x,y:q.y};
-    }
-  }
-  return p;
-}
-
-/* === ヒット判定 === */
+/* 点ヒット判定 */
 function hitTest(clientX,clientY){
   const rect=canvas.getBoundingClientRect();
   const sx=clientX-rect.left;
@@ -195,7 +205,7 @@ function hitTest(clientX,clientY){
   return null;
 }
 
-/* === タッチ === */
+/* タッチ */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
   const t=e.touches[0];
@@ -204,7 +214,7 @@ canvas.addEventListener("touchstart",e=>{
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
-  if(draggingPoint){
+  if(draggingPoint && e.touches.length===1){
     const t=e.touches[0];
     const p=screenToWorld(t.clientX,t.clientY);
     draggingPoint.x=p.x;
@@ -216,8 +226,7 @@ canvas.addEventListener("touchmove",e=>{
 canvas.addEventListener("touchend",e=>{
   if(!draggingPoint){
     const t=e.changedTouches[0];
-    let p=screenToWorld(t.clientX,t.clientY);
-    p=snapPoint(p);
+    const p=screenToWorld(t.clientX,t.clientY);
     const arr=(mode==="ref")?refPoints:cablePoints;
     if(arr.length<2){
       arr.push(p);
@@ -229,7 +238,7 @@ canvas.addEventListener("touchend",e=>{
   draggingPoint=null;
 });
 
-/* === ボタン === */
+/* ボタン */
 refBtn.onclick=()=>{
   mode="ref";
   refPoints=[];
@@ -243,14 +252,19 @@ calcBtn.onclick=()=>{
     result.innerHTML="<span class='ng'>入力が不足しています</span>";
     return;
   }
+
   const D=Number(shootDist.value);
   const Hr=Number(refHeight.value);
+
   const cam=cameraDB[dev];
   const fpx=cam.f*img.width/cam.sensor;
+
   const href=Math.abs(refPoints[1].y-refPoints[0].y);
   const hc=Math.abs(cablePoints[1].y-cablePoints[0].y);
+
   const scaleCorr=Hr/(href/fpx*D);
   const H=hc/fpx*D*scaleCorr;
+
   result.innerHTML=`<span class="ok">✅ ケーブル地上高：${H.toFixed(2)} m</span>`;
 };
 
@@ -266,7 +280,7 @@ resetBtn.onclick=()=>{
   draw();
 };
 
-/* === 画像 === */
+/* 画像 */
 fileInput.onchange=e=>{
   const r=new FileReader();
   r.onload=()=>{
