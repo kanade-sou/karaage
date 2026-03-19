@@ -2,22 +2,24 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>高さ推定ツール（スマホ実用版）</title>
+<title>高さ推定ツール（スマホ完全対応版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <style>
 body{
   margin:0;
   font-family:system-ui,-apple-system,sans-serif;
+  background:#fff;
 }
 header{
-  padding:6px 10px;
+  padding:8px 12px;
   font-size:14px;
+  background:#f3f4f6;
 }
 canvas{
   display:block;
   width:100vw;
-  height:75vh;
+  height:70vh;
   background:#ddd;
   touch-action:none;
 }
@@ -32,13 +34,34 @@ button,input{
 }
 .ok{color:#16a34a;}
 .ng{color:#dc2626;}
+
+/* 初回ガイド */
+#guide{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.75);
+  color:#fff;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:1000;
+}
+#guide.active{display:flex;}
+#guide .box{
+  background:#111;
+  padding:20px;
+  border-radius:12px;
+  max-width:90%;
+  text-align:center;
+}
 </style>
 </head>
 
 <body>
 
 <header>
-①参照物 → ②測定対象 → ③計算（ピンチで拡大・1本指で移動）
+①参照物 → ②測定対象 → ③計算  
+（ピンチで拡大・1本指で移動）
 </header>
 
 <canvas id="canvas"></canvas>
@@ -51,10 +74,23 @@ button,input{
   <div id="result"></div>
 </div>
 
+<div id="guide">
+  <div class="box">
+    <h3>使い方</h3>
+    <p>
+      ・写真はピンチで拡大できます<br>
+      ・1本指で移動できます<br>
+      ・上下2点をタップします
+    </p>
+    <p style="opacity:.7">タップして開始</p>
+  </div>
+</div>
+
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const result = document.getElementById("result");
+const guide = document.getElementById("guide");
 
 let img = new Image();
 let scale = 1;
@@ -65,12 +101,15 @@ let points = [];
 let refPoints = [];
 let refMode = false;
 
-let touches = [];
+let prevTouches = [];
 
-/* Canvasサイズ */
+/* DPR対応 */
 function resize(){
-  canvas.width = canvas.clientWidth;
-  canvas.height = canvas.clientHeight;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   draw();
 }
 window.addEventListener("resize", resize);
@@ -82,7 +121,6 @@ function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
   ctx.drawImage(img,0,0);
-
   drawLine(refPoints,"orange");
   drawLine(points,"red");
 }
@@ -108,27 +146,27 @@ function getPos(x,y){
 /* タッチ操作 */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
-  touches = [...e.touches];
+  prevTouches = [...e.touches];
 });
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
-  if(e.touches.length===2){
+  if(e.touches.length===2 && prevTouches.length===2){
     const [a,b] = e.touches;
-    const [a0,b0] = touches;
+    const [a0,b0] = prevTouches;
     const d0 = Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
     const d1 = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
     scale *= d1/d0;
-  }else if(e.touches.length===1 && touches.length===1){
-    offsetX += e.touches[0].clientX - touches[0].clientX;
-    offsetY += e.touches[0].clientY - touches[0].clientY;
+  }else if(e.touches.length===1 && prevTouches.length===1){
+    offsetX += e.touches[0].clientX - prevTouches[0].clientX;
+    offsetY += e.touches[0].clientY - prevTouches[0].clientY;
   }
-  touches = [...e.touches];
+  prevTouches = [...e.touches];
   draw();
 });
 
 canvas.addEventListener("touchend",e=>{
-  if(e.changedTouches.length===1 && touches.length===0){
+  if(e.changedTouches.length===1 && prevTouches.length===0){
     const t = e.changedTouches[0];
     const p = getPos(t.clientX,t.clientY);
     const arr = refMode ? refPoints : points;
@@ -140,7 +178,7 @@ canvas.addEventListener("touchend",e=>{
     }
     draw();
   }
-  touches = [...e.touches];
+  prevTouches = [...e.touches];
 });
 
 /* ボタン */
@@ -148,7 +186,6 @@ refBtn.onclick=()=>{
   refMode=true;
   refPoints=[];
 };
-
 calcBtn.onclick=()=>{
   if(refPoints.length!==2||points.length!==2){
     result.innerHTML="<span class='ng'>点が足りません</span>";
@@ -166,16 +203,26 @@ fileInput.onchange=e=>{
   const r = new FileReader();
   r.onload=()=>{
     img.onload=()=>{
-      scale = canvas.width/img.width;
+      scale = canvas.clientWidth / img.width;
       offsetX = 0;
-      offsetY = (canvas.height-img.height*scale)/2;
+      offsetY = (canvas.clientHeight - img.height*scale)/2;
       draw();
     };
-    img.src = r.result;
+    img.src=r.result;
   };
   r.readAsDataURL(e.target.files[0]);
 };
+
+/* 初回ガイド */
+if(!localStorage.getItem("heightToolGuide")){
+  guide.classList.add("active");
+  guide.onclick=()=>{
+    guide.classList.remove("active");
+    localStorage.setItem("heightToolGuide","1");
+  };
+}
 </script>
 
 </body>
 </html>
+``
