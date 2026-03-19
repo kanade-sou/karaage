@@ -75,7 +75,7 @@ input,select,button{
 
   <div id="result"></div>
   <div class="guide">
-    ①参照物 → ②ケーブルを上下2点タップ（点はドラッグ可）
+    ①参照物 → ②ケーブルを上下2点（ドラッグ＆ルーペで微調整）
   </div>
 </div>
 
@@ -89,9 +89,15 @@ let refPoints = [], cablePoints = [];
 let mode = "ref";
 let draggingPoint = null;
 let spiral = null;
+
+/* DPR */
 let dpr = window.devicePixelRatio || 1;
 
-/* iPhoneカメラDB */
+/* ルーペ */
+let showLoupe=false, loupeX=0, loupeY=0;
+const LOUPE_SIZE=120, LOUPE_ZOOM=3;
+
+/* カメラDB */
 const cameraDB={
   ip17_pro:{f:6.86,sensor:7.6}, ip17_max:{f:6.86,sensor:7.6}, ip17:{f:6.86,sensor:7.6},
   ip16_pro:{f:6.86,sensor:7.6}, ip16_max:{f:6.86,sensor:7.6}, ip16:{f:6.86,sensor:7.6},
@@ -101,31 +107,23 @@ const cameraDB={
   ip12:{f:4.25,sensor:7.6}, ipse:{f:4.15,sensor:6.4}
 };
 
-/* ===== DPR 正式対応 ===== */
+/* ===== resize ===== */
 function resize(){
-  const rect = canvas.getBoundingClientRect();
+  const r = canvas.getBoundingClientRect();
   dpr = window.devicePixelRatio || 1;
-
-  canvas.width  = rect.width  * dpr;
-  canvas.height = rect.height * dpr;
-
+  canvas.width  = r.width  * dpr;
+  canvas.height = r.height * dpr;
   draw();
 }
-window.addEventListener("resize", resize);
+window.addEventListener("resize",resize);
 resize();
 
-/* ===== 描画 ===== */
+/* ===== draw ===== */
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  ctx.setTransform(
-    dpr * scale, 0,
-    0, dpr * scale,
-    offsetX * dpr,
-    offsetY * dpr
-  );
-
+  ctx.setTransform(dpr*scale,0,0,dpr*scale,offsetX*dpr,offsetY*dpr);
   ctx.drawImage(img,0,0);
 
   drawLine(refPoints,"#f59e0b");
@@ -133,11 +131,12 @@ function draw(){
   drawPoints(refPoints,"#f59e0b");
   drawPoints(cablePoints,"#dc2626");
   drawSpiral();
+  drawLoupe();
 }
 
-function drawLine(arr,color){
+function drawLine(arr,c){
   if(arr.length===2){
-    ctx.strokeStyle=color;
+    ctx.strokeStyle=c;
     ctx.lineWidth=3/scale;
     ctx.beginPath();
     ctx.moveTo(arr[0].x,arr[0].y);
@@ -146,12 +145,12 @@ function drawLine(arr,color){
   }
 }
 
-function drawPoints(arr,color){
+function drawPoints(arr,c){
   const r=8/scale;
   arr.forEach(p=>{
     ctx.beginPath();
     ctx.arc(p.x,p.y,r,0,Math.PI*2);
-    ctx.fillStyle=color;
+    ctx.fillStyle=c;
     ctx.fill();
     ctx.lineWidth=2/scale;
     ctx.strokeStyle="#fff";
@@ -159,16 +158,16 @@ function drawPoints(arr,color){
   });
 }
 
-/* ===== らせん ===== */
+/* ===== spiral ===== */
 function drawSpiral(){
   if(!spiral) return;
-  const {x,y,t,color}=spiral;
-  ctx.strokeStyle=color;
+  const {x,y,t,c}=spiral;
+  ctx.strokeStyle=c;
   ctx.lineWidth=2/scale;
   ctx.beginPath();
   for(let a=0;a<t;a+=0.25){
     const r=4*a;
-    ctx.lineTo(x+r*Math.cos(a), y+r*Math.sin(a));
+    ctx.lineTo(x+r*Math.cos(a),y+r*Math.sin(a));
   }
   ctx.stroke();
   spiral.t+=0.5;
@@ -176,108 +175,124 @@ function drawSpiral(){
   else spiral=null;
 }
 
-/* ===== 座標変換 ===== */
-function screenToWorld(clientX,clientY){
-  const rect = canvas.getBoundingClientRect();
-  const x = (clientX - rect.left - offsetX) / scale;
-  const y = (clientY - rect.top  - offsetY) / scale;
-  return {x,y};
+/* ===== loupe ===== */
+function drawLoupe(){
+  if(!showLoupe) return;
+  ctx.setTransform(1,0,0,1,0,0);
+
+  const s=LOUPE_SIZE,z=LOUPE_ZOOM;
+  const sx=loupeX-s/(2*z), sy=loupeY-s/(2*z);
+
+  ctx.fillStyle="#fff";
+  ctx.fillRect(loupeX-s/2,loupeY-s/2,s,s);
+
+  ctx.drawImage(
+    canvas,
+    sx*dpr,sy*dpr,(s/z)*dpr,(s/z)*dpr,
+    loupeX-s/2,loupeY-s/2,s,s
+  );
+
+  ctx.strokeStyle="#2563eb";
+  ctx.strokeRect(loupeX-s/2,loupeY-s/2,s,s);
+
+  ctx.strokeStyle="#dc2626";
+  ctx.beginPath();
+  ctx.moveTo(loupeX,loupeY-s/2);
+  ctx.lineTo(loupeX,loupeY+s/2);
+  ctx.moveTo(loupeX-s/2,loupeY);
+  ctx.lineTo(loupeX+s/2,loupeY);
+  ctx.stroke();
 }
 
-/* ===== タップ吸着（±5px） ===== */
-function snapPoint(p){
-  const snap=5;
-  for(const q of [...refPoints,...cablePoints]){
-    if(Math.hypot(p.x-q.x,p.y-q.y)<snap/scale){
-      return {x:q.x,y:q.y};
-    }
-  }
-  return p;
+/* ===== utils ===== */
+function screenToWorld(x,y){
+  const r=canvas.getBoundingClientRect();
+  return {
+    x:(x-r.left-offsetX)/scale,
+    y:(y-r.top-offsetY)/scale
+  };
 }
-
-/* ===== ヒット判定 ===== */
-function hitTest(clientX,clientY){
-  const rect=canvas.getBoundingClientRect();
-  const sx=clientX-rect.left;
-  const sy=clientY-rect.top;
-  const r=15;
+function hitTest(x,y){
+  const r=canvas.getBoundingClientRect();
+  const sx=x-r.left, sy=y-r.top;
   for(const p of [...refPoints,...cablePoints]){
     const px=p.x*scale+offsetX;
     const py=p.y*scale+offsetY;
-    if(Math.hypot(px-sx,py-sy)<=r) return p;
+    if(Math.hypot(px-sx,py-sy)<15) return p;
   }
   return null;
 }
 
-/* ===== タッチ ===== */
+/* ===== touch ===== */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
-  draggingPoint=hitTest(e.touches[0].clientX,e.touches[0].clientY);
+  const t=e.touches[0];
+  draggingPoint=hitTest(t.clientX,t.clientY);
+  if(draggingPoint){
+    showLoupe=true;
+    loupeX=t.clientX;
+    loupeY=t.clientY-80;
+  }
 },{passive:false});
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
   if(draggingPoint){
-    const p=screenToWorld(e.touches[0].clientX,e.touches[0].clientY);
+    const t=e.touches[0];
+    const p=screenToWorld(t.clientX,t.clientY);
     draggingPoint.x=p.x;
     draggingPoint.y=p.y;
+    loupeX=t.clientX;
+    loupeY=t.clientY-80;
     draw();
   }
 },{passive:false});
 
 canvas.addEventListener("touchend",e=>{
   if(!draggingPoint){
-    let p=screenToWorld(e.changedTouches[0].clientX,e.changedTouches[0].clientY);
-    p=snapPoint(p);
+    const t=e.changedTouches[0];
+    const p=screenToWorld(t.clientX,t.clientY);
     const arr=(mode==="ref")?refPoints:cablePoints;
     if(arr.length<2){
       arr.push(p);
-      spiral={x:p.x,y:p.y,t:0,color:(mode==="ref")?"#f59e0b":"#dc2626"};
-      if(mode==="ref" && arr.length===2) mode="cable";
-      draw();
+      spiral={x:p.x,y:p.y,t:0,c:(mode==="ref")?"#f59e0b":"#dc2626"};
+      if(mode==="ref"&&arr.length===2) mode="cable";
     }
   }
+  showLoupe=false;
   draggingPoint=null;
+  draw();
 });
 
-/* ===== ボタン ===== */
+/* ===== buttons ===== */
 refBtn.onclick=()=>{
   mode="ref";
   refPoints=[];
   cablePoints=[];
   result.textContent="";
 };
-
 calcBtn.onclick=()=>{
   const dev=device.value;
   if(!dev||refPoints.length!==2||cablePoints.length!==2){
-    result.innerHTML="<span class='ng'>入力が不足しています</span>";
-    return;
+    result.innerHTML="<span class='ng'>入力不足</span>";return;
   }
-  const D=Number(shootDist.value);
-  const Hr=Number(refHeight.value);
+  const D=+shootDist.value, Hr=+refHeight.value;
   const cam=cameraDB[dev];
   const fpx=cam.f*img.width/cam.sensor;
   const href=Math.abs(refPoints[1].y-refPoints[0].y);
   const hc=Math.abs(cablePoints[1].y-cablePoints[0].y);
-  const scaleCorr=Hr/(href/fpx*D);
-  const H=hc/fpx*D*scaleCorr;
+  const H=hc/fpx*D*(Hr/(href/fpx*D));
   result.innerHTML=`<span class="ok">✅ ケーブル地上高：${H.toFixed(2)} m</span>`;
 };
-
 resetBtn.onclick=()=>{
   img.src="";
-  refPoints=[];
-  cablePoints=[];
-  mode="ref";
-  scale=1;
-  offsetX=0;
-  offsetY=0;
+  refPoints=[];cablePoints=[];
+  mode="ref";scale=1;offsetX=0;offsetY=0;
   result.textContent="";
   draw();
 };
 
-/* ===== 画像 ===== */
+/* ===== image ===== */
 fileInput.onchange=e=>{
   const r=new FileReader();
   r.onload=()=>{
@@ -295,4 +310,3 @@ fileInput.onchange=e=>{
 
 </body>
 </html>
-``
