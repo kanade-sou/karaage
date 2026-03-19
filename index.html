@@ -75,7 +75,7 @@ input,select,button{
 
   <div id="result"></div>
   <div class="guide">
-    ①参照物 → ②ケーブルを上下2点（ドラッグ＆ルーペで微調整）
+    ①参照物 → ②ケーブルを上下2点（ドラッグ＋ルーペで微調整）
   </div>
 </div>
 
@@ -90,24 +90,14 @@ let mode = "ref";
 let draggingPoint = null;
 let spiral = null;
 
-/* DPR */
 let dpr = window.devicePixelRatio || 1;
 
-/* ルーペ */
+/* ===== ルーペ設定（小型版） ===== */
 let showLoupe=false, loupeX=0, loupeY=0;
-const LOUPE_SIZE=120, LOUPE_ZOOM=3;
+const LOUPE_SIZE = 80;   // ← 小さく
+const LOUPE_ZOOM = 2.5; // ← 少し控えめ
 
-/* カメラDB */
-const cameraDB={
-  ip17_pro:{f:6.86,sensor:7.6}, ip17_max:{f:6.86,sensor:7.6}, ip17:{f:6.86,sensor:7.6},
-  ip16_pro:{f:6.86,sensor:7.6}, ip16_max:{f:6.86,sensor:7.6}, ip16:{f:6.86,sensor:7.6},
-  ip15_pro:{f:6.86,sensor:7.6}, ip15_max:{f:6.86,sensor:7.6}, ip15:{f:6.86,sensor:7.6},
-  ip14_pro:{f:6.86,sensor:7.6}, ip14:{f:6.86,sensor:7.6},
-  ip13_pro:{f:5.7,sensor:7.6}, ip13:{f:5.7,sensor:7.6},
-  ip12:{f:4.25,sensor:7.6}, ipse:{f:4.15,sensor:6.4}
-};
-
-/* ===== resize ===== */
+/* ===== resize（DPR対応） ===== */
 function resize(){
   const r = canvas.getBoundingClientRect();
   dpr = window.devicePixelRatio || 1;
@@ -118,7 +108,7 @@ function resize(){
 window.addEventListener("resize",resize);
 resize();
 
-/* ===== draw ===== */
+/* ===== 描画 ===== */
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -137,7 +127,7 @@ function draw(){
 function drawLine(arr,c){
   if(arr.length===2){
     ctx.strokeStyle=c;
-    ctx.lineWidth=3/scale;
+    ctx.lineWidth=2/scale;
     ctx.beginPath();
     ctx.moveTo(arr[0].x,arr[0].y);
     ctx.lineTo(arr[1].x,arr[1].y);
@@ -145,37 +135,38 @@ function drawLine(arr,c){
   }
 }
 
+/* ✅ 点を小さく */
 function drawPoints(arr,c){
-  const r=8/scale;
+  const r=4/scale;      // ← 小さく
   arr.forEach(p=>{
     ctx.beginPath();
     ctx.arc(p.x,p.y,r,0,Math.PI*2);
     ctx.fillStyle=c;
     ctx.fill();
-    ctx.lineWidth=2/scale;
+    ctx.lineWidth=1/scale;
     ctx.strokeStyle="#fff";
     ctx.stroke();
   });
 }
 
-/* ===== spiral ===== */
+/* ===== らせん ===== */
 function drawSpiral(){
   if(!spiral) return;
   const {x,y,t,c}=spiral;
   ctx.strokeStyle=c;
-  ctx.lineWidth=2/scale;
+  ctx.lineWidth=1.5/scale;
   ctx.beginPath();
   for(let a=0;a<t;a+=0.25){
-    const r=4*a;
+    const r=3*a;
     ctx.lineTo(x+r*Math.cos(a),y+r*Math.sin(a));
   }
   ctx.stroke();
-  spiral.t+=0.5;
-  if(spiral.t<8) requestAnimationFrame(draw);
+  spiral.t+=0.4;
+  if(spiral.t<6) requestAnimationFrame(draw);
   else spiral=null;
 }
 
-/* ===== loupe ===== */
+/* ===== ルーペ（小型） ===== */
 function drawLoupe(){
   if(!showLoupe) return;
   ctx.setTransform(1,0,0,1,0,0);
@@ -193,6 +184,7 @@ function drawLoupe(){
   );
 
   ctx.strokeStyle="#2563eb";
+  ctx.lineWidth=1.5;
   ctx.strokeRect(loupeX-s/2,loupeY-s/2,s,s);
 
   ctx.strokeStyle="#dc2626";
@@ -204,7 +196,7 @@ function drawLoupe(){
   ctx.stroke();
 }
 
-/* ===== utils ===== */
+/* ===== 座標変換 ===== */
 function screenToWorld(x,y){
   const r=canvas.getBoundingClientRect();
   return {
@@ -218,12 +210,12 @@ function hitTest(x,y){
   for(const p of [...refPoints,...cablePoints]){
     const px=p.x*scale+offsetX;
     const py=p.y*scale+offsetY;
-    if(Math.hypot(px-sx,py-sy)<15) return p;
+    if(Math.hypot(px-sx,py-sy)<12) return p;
   }
   return null;
 }
 
-/* ===== touch ===== */
+/* ===== タッチ ===== */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
   const t=e.touches[0];
@@ -231,7 +223,7 @@ canvas.addEventListener("touchstart",e=>{
   if(draggingPoint){
     showLoupe=true;
     loupeX=t.clientX;
-    loupeY=t.clientY-80;
+    loupeY=t.clientY-60;
   }
 },{passive:false});
 
@@ -243,7 +235,7 @@ canvas.addEventListener("touchmove",e=>{
     draggingPoint.x=p.x;
     draggingPoint.y=p.y;
     loupeX=t.clientX;
-    loupeY=t.clientY-80;
+    loupeY=t.clientY-60;
     draw();
   }
 },{passive:false});
@@ -264,11 +256,10 @@ canvas.addEventListener("touchend",e=>{
   draw();
 });
 
-/* ===== buttons ===== */
+/* ===== ボタン ===== */
 refBtn.onclick=()=>{
   mode="ref";
-  refPoints=[];
-  cablePoints=[];
+  refPoints=[];cablePoints=[];
   result.textContent="";
 };
 calcBtn.onclick=()=>{
@@ -292,7 +283,7 @@ resetBtn.onclick=()=>{
   draw();
 };
 
-/* ===== image ===== */
+/* ===== 画像 ===== */
 fileInput.onchange=e=>{
   const r=new FileReader();
   r.onload=()=>{
