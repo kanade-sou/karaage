@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>高さ推定ツール（スマホ実用版）</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<style>
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,sans-serif;
+}
+header{
+  padding:6px 10px;
+  font-size:14px;
+}
+canvas{
+  display:block;
+  width:100vw;
+  height:75vh;
+  background:#ddd;
+  touch-action:none;
+}
+.panel{
+  padding:10px;
+}
+button,input{
+  width:100%;
+  padding:10px;
+  margin-top:6px;
+  font-size:15px;
+}
+.ok{color:#16a34a;}
+.ng{color:#dc2626;}
+</style>
+</head>
+
+<body>
+
+<header>
+①参照物 → ②測定対象 → ③計算（ピンチで拡大・1本指で移動）
+</header>
+
+<canvas id="canvas"></canvas>
+
+<div class="panel">
+  <input type="file" id="fileInput" accept="image/*">
+  <input type="number" id="refLen" value="100" placeholder="参照物の高さ（cm）">
+  <button id="refBtn">参照物を指定</button>
+  <button id="calcBtn">計算</button>
+  <div id="result"></div>
+</div>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const result = document.getElementById("result");
+
+let img = new Image();
+let scale = 1;
+let offsetX = 0;
+let offsetY = 0;
+
+let points = [];
+let refPoints = [];
+let refMode = false;
+
+let touches = [];
+
+/* Canvasサイズ */
+function resize(){
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  draw();
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* 描画 */
+function draw(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
+  ctx.drawImage(img,0,0);
+
+  drawLine(refPoints,"orange");
+  drawLine(points,"red");
+}
+function drawLine(arr,color){
+  if(arr.length===2){
+    ctx.strokeStyle=color;
+    ctx.lineWidth=2/scale;
+    ctx.beginPath();
+    ctx.moveTo(arr[0].x,arr[0].y);
+    ctx.lineTo(arr[1].x,arr[1].y);
+    ctx.stroke();
+  }
+}
+
+/* 座標変換 */
+function getPos(x,y){
+  return {
+    x:(x-offsetX)/scale,
+    y:(y-offsetY)/scale
+  };
+}
+
+/* タッチ操作 */
+canvas.addEventListener("touchstart",e=>{
+  e.preventDefault();
+  touches = [...e.touches];
+});
+
+canvas.addEventListener("touchmove",e=>{
+  e.preventDefault();
+  if(e.touches.length===2){
+    const [a,b] = e.touches;
+    const [a0,b0] = touches;
+    const d0 = Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
+    const d1 = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    scale *= d1/d0;
+  }else if(e.touches.length===1 && touches.length===1){
+    offsetX += e.touches[0].clientX - touches[0].clientX;
+    offsetY += e.touches[0].clientY - touches[0].clientY;
+  }
+  touches = [...e.touches];
+  draw();
+});
+
+canvas.addEventListener("touchend",e=>{
+  if(e.changedTouches.length===1 && touches.length===0){
+    const t = e.changedTouches[0];
+    const p = getPos(t.clientX,t.clientY);
+    const arr = refMode ? refPoints : points;
+    if(arr.length<2){
+      arr.push(p);
+      if(refMode && refPoints.length===2){
+        refMode=false;
+      }
+    }
+    draw();
+  }
+  touches = [...e.touches];
+});
+
+/* ボタン */
+refBtn.onclick=()=>{
+  refMode=true;
+  refPoints=[];
+};
+
+calcBtn.onclick=()=>{
+  if(refPoints.length!==2||points.length!==2){
+    result.innerHTML="<span class='ng'>点が足りません</span>";
+    return;
+  }
+  const refCm = Number(refLen.value);
+  const h = Math.abs(points[1].y-points[0].y) /
+            Math.abs(refPoints[1].y-refPoints[0].y) *
+            refCm;
+  result.innerHTML=`<span class='ok'>推定高さ ${h.toFixed(1)} cm</span>`;
+};
+
+/* 画像 */
+fileInput.onchange=e=>{
+  const r = new FileReader();
+  r.onload=()=>{
+    img.onload=()=>{
+      scale = canvas.width/img.width;
+      offsetX = 0;
+      offsetY = (canvas.height-img.height*scale)/2;
+      draw();
+    };
+    img.src = r.result;
+  };
+  r.readAsDataURL(e.target.files[0]);
+};
+</script>
+
+</body>
+</html>
