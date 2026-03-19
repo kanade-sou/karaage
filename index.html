@@ -47,7 +47,6 @@ input,select,button{
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
 
-  <!-- iPhone機種選択 -->
   <select id="device">
     <option value="">📱 iPhone機種を選択</option>
     <option value="ip15">iPhone 15 Pro / Pro Max</option>
@@ -66,21 +65,23 @@ input,select,button{
 
   <div id="result"></div>
   <div class="guide">
-    ① 参照物を上下2点タップ → ② ケーブルを上下2点タップ
+    ①参照物→②ケーブルを上下2点指定（点はドラッグ可）
   </div>
 </div>
 
 <script>
 const canvas=document.getElementById("canvas");
 const ctx=canvas.getContext("2d");
-let img=new Image();
 
+let img=new Image();
 let scale=1,offsetX=0,offsetY=0;
+
 let refPoints=[], cablePoints=[];
-let refMode=false;
+let mode="ref"; // "ref" or "cable"
+let draggingPoint=null;
 let spiral=null;
 
-/* iPhoneカメラデータ */
+/* iPhoneカメラDB */
 const cameraDB={
   ip15:{f:6.86,sensor:7.6},
   ip14:{f:6.86,sensor:7.6},
@@ -97,7 +98,7 @@ function resize(){
 window.addEventListener("resize",resize);
 resize();
 
-/* 描画 */
+/* ===== 描画 ===== */
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -107,6 +108,8 @@ function draw(){
 
   drawLine(refPoints,"#f59e0b");
   drawLine(cablePoints,"#dc2626");
+  drawPoints(refPoints,"#f59e0b");
+  drawPoints(cablePoints,"#dc2626");
   drawSpiral();
 }
 
@@ -121,52 +124,116 @@ function drawLine(arr,color){
   }
 }
 
-/* らせん演出 */
+function drawPoints(arr,color){
+  const r=8/scale;
+  arr.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,r,0,Math.PI*2);
+    ctx.fillStyle=color;
+    ctx.fill();
+    ctx.lineWidth=2/scale;
+    ctx.strokeStyle="#fff";
+    ctx.stroke();
+  });
+}
+
+/* ===== らせん ===== */
 function drawSpiral(){
   if(!spiral) return;
   const {x,y,t,color}=spiral;
   ctx.strokeStyle=color;
   ctx.lineWidth=2/scale;
   ctx.beginPath();
-  for(let a=0;a<t;a+=0.2){
+  for(let a=0;a<t;a+=0.25){
     const r=4*a;
     ctx.lineTo(x+r*Math.cos(a), y+r*Math.sin(a));
   }
   ctx.stroke();
-  spiral.t+=0.4;
+  spiral.t+=0.5;
   if(spiral.t<8) requestAnimationFrame(draw);
   else spiral=null;
 }
 
+/* ===== 座標変換 ===== */
 function screenToWorld(x,y){
   return {x:(x-offsetX)/scale,y:(y-offsetY)/scale};
 }
 
-/* タップ */
-canvas.addEventListener("touchend",e=>{
-  const t=e.changedTouches[0];
-  const p=screenToWorld(t.clientX,t.clientY);
-  const arr=refMode?refPoints:cablePoints;
-  if(arr.length<2){
-    arr.push(p);
-    spiral={x:p.x,y:p.y,t:0,color:refMode?"#f59e0b":"#dc2626"};
+/* ===== 点ヒット判定（スクリーン座標） ===== */
+function hitTest(clientX,clientY){
+  const rect=canvas.getBoundingClientRect();
+  const sx=clientX-rect.left;
+  const sy=clientY-rect.top;
+  const r=15;
+
+  for(const p of [...refPoints,...cablePoints]){
+    const px=p.x*scale+offsetX;
+    const py=p.y*scale+offsetY;
+    if(Math.hypot(px-sx,py-sy)<=r) return p;
+  }
+  return null;
+}
+
+/* ===== タッチ操作 ===== */
+canvas.addEventListener("touchstart",e=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  draggingPoint=hitTest(t.clientX,t.clientY);
+},{passive:false});
+
+canvas.addEventListener("touchmove",e=>{
+  e.preventDefault();
+
+  if(draggingPoint && e.touches.length===1){
+    const t=e.touches[0];
+    const p=screenToWorld(t.clientX,t.clientY);
+    draggingPoint.x=p.x;
+    draggingPoint.y=p.y;
+    draw();
+    return;
+  }
+
+  if(e.touches.length===2){
+    const [a,b]=e.touches;
+    const cx=(a.clientX+b.clientX)/2;
+    const cy=(a.clientY+b.clientY)/2;
+    const wx=(cx-offsetX)/scale;
+    const wy=(cy-offsetY)/scale;
+    scale*=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/
+           Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    offsetX=cx-wx*scale;
+    offsetY=cy-wy*scale;
     draw();
   }
+},{passive:false});
+
+canvas.addEventListener("touchend",e=>{
+  if(!draggingPoint){
+    const t=e.changedTouches[0];
+    const p=screenToWorld(t.clientX,t.clientY);
+    const arr=(mode==="ref")?refPoints:cablePoints;
+    if(arr.length<2){
+      arr.push(p);
+      spiral={x:p.x,y:p.y,t:0,color:(mode==="ref")?"#f59e0b":"#dc2626"};
+      if(mode==="ref" && arr.length===2) mode="cable";
+      draw();
+    }
+  }
+  draggingPoint=null;
 });
 
-/* 参照物指定 */
+/* ===== ボタン ===== */
 refBtn.onclick=()=>{
-  refMode=true;
+  mode="ref";
   refPoints=[];
   cablePoints=[];
   result.textContent="";
 };
 
-/* 計算 */
 calcBtn.onclick=()=>{
   const dev=device.value;
   if(!dev||refPoints.length!==2||cablePoints.length!==2){
-    result.innerHTML="<span class='ng'>入力または指定が不足しています</span>";
+    result.innerHTML="<span class='ng'>入力が不足しています</span>";
     return;
   }
 
@@ -185,12 +252,11 @@ calcBtn.onclick=()=>{
   result.innerHTML=`<span class="ok">✅ ケーブル地上高：${H.toFixed(2)} m</span>`;
 };
 
-/* リセット */
 resetBtn.onclick=()=>{
   img.src="";
   refPoints=[];
   cablePoints=[];
-  refMode=false;
+  mode="ref";
   scale=1;
   offsetX=0;
   offsetY=0;
@@ -198,7 +264,7 @@ resetBtn.onclick=()=>{
   draw();
 };
 
-/* 画像読み込み */
+/* ===== 画像 ===== */
 fileInput.onchange=e=>{
   const r=new FileReader();
   r.onload=()=>{
