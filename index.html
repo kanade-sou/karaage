@@ -6,15 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <style>
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,sans-serif;
-}
-header{
-  padding:8px 12px;
-  font-size:14px;
-  background:#f3f4f6;
-}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;}
+header{padding:8px 12px;font-size:14px;background:#f3f4f6;}
 canvas{
   display:block;
   width:100vw;
@@ -22,35 +15,14 @@ canvas{
   background:#ddd;
   touch-action:none;
 }
-.panel{
-  padding:10px;
-}
-button,input{
-  width:100%;
-  padding:10px;
-  margin-top:6px;
-  font-size:15px;
-}
-
-/* ✅ 垂直スナップUI（修正済み） */
+.panel{padding:10px;}
+button,input{width:100%;padding:10px;margin-top:6px;font-size:15px;}
 .snap-option{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-top:8px;
-  padding:10px;
-  background:#f9fafb;
-  border-radius:6px;
+  display:flex;align-items:center;gap:10px;
+  margin-top:8px;padding:10px;
+  background:#f9fafb;border-radius:6px;
 }
-.snap-option input{
-  width:22px;
-  height:22px;
-}
-.snap-option label{
-  font-size:15px;
-  line-height:1.4;
-}
-
+.snap-option input{width:22px;height:22px;}
 .refbtn{background:#f59e0b;color:#fff;font-weight:bold;}
 .primary{background:#2563eb;color:#fff;font-weight:bold;}
 .ok{color:#16a34a;}
@@ -72,7 +44,6 @@ button,input{
   <input type="number" id="shootDist" placeholder="撮影距離（m・任意）" step="0.1">
   <input type="number" id="refLen" value="100" placeholder="参照物の高さ（cm）">
 
-  <!-- ✅ 垂直スナップ -->
   <div class="snap-option">
     <input type="checkbox" id="snapVertical" checked>
     <label for="snapVertical">垂直スナップ（上下点を完全に揃える）</label>
@@ -88,23 +59,34 @@ button,input{
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+
 const snapCheckbox = document.getElementById("snapVertical");
 const status = document.getElementById("status");
 const result = document.getElementById("result");
 
 let img = new Image();
-let scale = 1, offsetX = 0, offsetY = 0;
-let points = [], refPoints = [], refMode = false;
 
+/* ===== view状態 ===== */
+let scale = 1;
+let offsetX = 0;
+let offsetY = 0;
+
+/* ===== 点管理 ===== */
+let points = [];
+let refPoints = [];
+let refMode = false;
+
+/* ===== タッチ管理 ===== */
 let startTouches = [];
-let touchStartPos = null;
+let tapStart = null;
+let moved = false;
 
-/* ===== DPR対応 ===== */
+/* ===== DPR安全canvas ===== */
 function resize(){
+  const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
-  const r = canvas.getBoundingClientRect();
-  canvas.width = r.width * dpr;
-  canvas.height = r.height * dpr;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
   ctx.setTransform(dpr,0,0,dpr,0,0);
   draw();
 }
@@ -113,83 +95,99 @@ resize();
 
 /* ===== 描画 ===== */
 function draw(){
+  ctx.save();
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
+  ctx.restore();
 
+  ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
   ctx.drawImage(img,0,0);
 
-  // ✅ 参照物：オレンジ
-  drawLine(refPoints, "#f59e0b");
-  // ✅ 測定対象：赤
-  drawLine(points, "#dc2626");
+  drawLine(refPoints,"#f59e0b");
+  drawLine(points,"#dc2626");
 }
 
 function drawLine(arr,color){
-  if(arr.length === 2){
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3 / scale;
+  if(arr.length===2){
+    ctx.strokeStyle=color;
+    ctx.lineWidth=3/scale;
     ctx.beginPath();
-    ctx.moveTo(arr[0].x, arr[0].y);
-    ctx.lineTo(arr[1].x, arr[1].y);
+    ctx.moveTo(arr[0].x,arr[0].y);
+    ctx.lineTo(arr[1].x,arr[1].y);
     ctx.stroke();
   }
 }
 
-/* ===== 座標変換 ===== */
-function getPos(x,y){
-  return { x:(x-offsetX)/scale, y:(y-offsetY)/scale };
+/* ===== 座標変換（ズレ防止の核心） ===== */
+function screenToWorld(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  return {
+    x:(x - offsetX) / scale,
+    y:(y - offsetY) / scale
+  };
 }
 
 /* ===== 垂直スナップ ===== */
 function applyVerticalSnap(arr){
   if(arr.length===2 && snapCheckbox.checked){
-    const x = (arr[0].x + arr[1].x) / 2;
-    arr[0].x = x;
-    arr[1].x = x;
+    arr[1].x = arr[0].x;
   }
 }
 
 /* ===== タッチ操作 ===== */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
-  startTouches = [...e.touches];
+  startTouches=[...e.touches];
+  moved=false;
   if(e.touches.length===1){
-    touchStartPos = {x:e.touches[0].clientX,y:e.touches[0].clientY};
+    tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY};
   }
-});
+},{passive:false});
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
+  moved=true;
+
   if(e.touches.length===2 && startTouches.length===2){
-    const [a,b]=e.touches,[a0,b0]=startTouches;
-    scale *= Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY) /
-             Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
-  }else if(e.touches.length===1 && startTouches.length===1){
-    offsetX += e.touches[0].clientX - startTouches[0].clientX;
-    offsetY += e.touches[0].clientY - startTouches[0].clientY;
+    const [a,b]=e.touches;
+    const [a0,b0]=startTouches;
+
+    const cx=(a.clientX+b.clientX)/2;
+    const cy=(a.clientY+b.clientY)/2;
+    const before=screenToWorld(cx,cy);
+
+    const d0=Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
+    const d1=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+
+    scale*=d1/d0;
+    scale=Math.min(Math.max(scale,0.2),10);
+
+    const after=screenToWorld(cx,cy);
+    offsetX+=(after.x-before.x)*scale;
+    offsetY+=(after.y-before.y)*scale;
   }
-  startTouches = [...e.touches];
+
+  if(e.touches.length===1 && startTouches.length===1){
+    offsetX+=e.touches[0].clientX-startTouches[0].clientX;
+    offsetY+=e.touches[0].clientY-startTouches[0].clientY;
+  }
+
+  startTouches=[...e.touches];
   draw();
-});
+},{passive:false});
 
 canvas.addEventListener("touchend",e=>{
-  if(touchStartPos && e.changedTouches.length===1){
+  if(tapStart && !moved && e.changedTouches.length===1){
     const t=e.changedTouches[0];
-    const dist=Math.hypot(
-      t.clientX-touchStartPos.x,
-      t.clientY-touchStartPos.y
-    );
-
-    if(dist < 10){
-      const p=getPos(t.clientX,t.clientY);
-      const arr=refMode ? refPoints : points;
-
-      if(arr.length < 2){
+    if(Math.hypot(t.clientX-tapStart.x,t.clientY-tapStart.y)<8){
+      const p=screenToWorld(t.clientX,t.clientY);
+      const arr=refMode?refPoints:points;
+      if(arr.length<2){
         arr.push(p);
         applyVerticalSnap(arr);
-
-        if(refMode && refPoints.length===2){
+        if(refMode && arr.length===2){
           refMode=false;
           status.textContent="参照物設定完了。次に測定対象を指定してください。";
         }
@@ -197,8 +195,8 @@ canvas.addEventListener("touchend",e=>{
       draw();
     }
   }
+  tapStart=null;
   startTouches=[];
-  touchStartPos=null;
 });
 
 /* ===== ボタン ===== */
@@ -209,7 +207,7 @@ refBtn.onclick=()=>{
 };
 
 calcBtn.onclick=()=>{
-  if(refPoints.length!==2 || points.length!==2){
+  if(refPoints.length!==2||points.length!==2){
     result.innerHTML="<span class='ng'>参照物と測定対象を指定してください</span>";
     return;
   }
@@ -224,9 +222,12 @@ fileInput.onchange=e=>{
   const r=new FileReader();
   r.onload=()=>{
     img.onload=()=>{
+      points=[];refPoints=[];refMode=false;
       scale=canvas.clientWidth/img.width;
       offsetX=0;
       offsetY=(canvas.clientHeight-img.height*scale)/2;
+      status.textContent="画像を読み込みました。参照物を指定してください。";
+      result.textContent="";
       draw();
     };
     img.src=r.result;
@@ -234,6 +235,5 @@ fileInput.onchange=e=>{
   r.readAsDataURL(e.target.files[0]);
 };
 </script>
-
 </body>
 </html>
