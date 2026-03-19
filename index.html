@@ -2,19 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>高さ推定ツール（スマホ完全対応・最終版）</title>
+<title>高さ推定ツール（スマホ完全対応・最終安定版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <style>
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,sans-serif;
-}
-header{
-  padding:8px 12px;
-  font-size:14px;
-  background:#f3f4f6;
-}
+body{margin:0;font-family:system-ui,-apple-system,sans-serif;}
+header{padding:8px 12px;font-size:14px;background:#f3f4f6;}
 canvas{
   display:block;
   width:100vw;
@@ -22,25 +15,13 @@ canvas{
   background:#ddd;
   touch-action:none;
 }
-.panel{
-  padding:10px;
-}
-button,input{
-  width:100%;
-  padding:10px;
-  margin-top:6px;
-  font-size:15px;
-}
+.panel{padding:10px;}
+button,input{width:100%;padding:10px;margin-top:6px;font-size:15px;}
 .refbtn{background:#f59e0b;color:#fff;font-weight:bold;}
 .primary{background:#2563eb;color:#fff;font-weight:bold;}
 .ok{color:#16a34a;}
 .ng{color:#dc2626;}
-.option{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  margin-top:6px;
-}
+.option{display:flex;align-items:center;gap:8px;margin-top:6px;}
 </style>
 </head>
 
@@ -55,20 +36,14 @@ button,input{
 
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
-
-  <!-- ✅ 撮影距離 -->
   <input type="number" id="shootDist" placeholder="撮影距離（m・任意）" step="0.1">
-
-  <!-- ✅ 参照物の実寸 -->
   <input type="number" id="refLen" value="100" placeholder="参照物の高さ（cm）">
 
-  <!-- ✅ 垂直スナップ -->
   <div class="option">
     <input type="checkbox" id="snapVertical" checked>
-    <label for="snapVertical">垂直スナップを有効にする</label>
+    <label for="snapVertical">垂直スナップ</label>
   </div>
 
-  <!-- ✅ 参照物指定（操作デザイン維持） -->
   <button id="refBtn" class="refbtn">参照物を指定</button>
   <button id="calcBtn" class="primary">計算</button>
 
@@ -79,45 +54,38 @@ button,input{
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+const snapCheckbox = document.getElementById("snapVertical");
 const status = document.getElementById("status");
 const result = document.getElementById("result");
-const snapCheckbox = document.getElementById("snapVertical");
 
 let img = new Image();
-let scale = 1;
-let offsetX = 0;
-let offsetY = 0;
+let scale = 1, offsetX = 0, offsetY = 0;
+let points = [], refPoints = [], refMode = false;
 
-let points = [];
-let refPoints = [];
-let refMode = false;
+let startTouches = [];
+let touchStartPos = null;
 
-let lastTouches = [];
-let moved = false;
-
-/* ===== DPR対応 ===== */
+/* DPR */
 function resize(){
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = r.width * dpr;
+  canvas.height = r.height * dpr;
   ctx.setTransform(dpr,0,0,dpr,0,0);
   draw();
 }
 window.addEventListener("resize", resize);
 resize();
 
-/* ===== 描画 ===== */
+/* 描画 */
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
   ctx.drawImage(img,0,0);
-
   drawLine(refPoints,"orange");
   drawLine(points,"red");
 }
-
 function drawLine(arr,color){
   if(arr.length===2){
     ctx.strokeStyle=color;
@@ -129,117 +97,94 @@ function drawLine(arr,color){
   }
 }
 
-/* ===== 座標変換 ===== */
+/* 座標 */
 function getPos(x,y){
-  return {
-    x:(x-offsetX)/scale,
-    y:(y-offsetY)/scale
-  };
+  return {x:(x-offsetX)/scale,y:(y-offsetY)/scale};
 }
 
-/* ===== 垂直スナップ ===== */
+/* 垂直スナップ */
 function applyVerticalSnap(arr){
   if(arr.length===2 && snapCheckbox.checked){
-    const x = (arr[0].x + arr[1].x) / 2;
-    arr[0].x = x;
-    arr[1].x = x;
+    const x = (arr[0].x + arr[1].x)/2;
+    arr[0].x = arr[1].x = x;
   }
 }
 
-/* ===== タッチ操作 ===== */
+/* タッチ */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
-  lastTouches = [...e.touches];
-  moved = false;
+  startTouches = [...e.touches];
+  if(e.touches.length===1){
+    touchStartPos = {x:e.touches[0].clientX,y:e.touches[0].clientY};
+  }
 });
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
-  moved = true;
-
-  if(e.touches.length===2 && lastTouches.length===2){
-    const [a,b] = e.touches;
-    const [a0,b0] = lastTouches;
-    const d0 = Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
-    const d1 = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-    scale *= d1/d0;
-  }else if(e.touches.length===1 && lastTouches.length===1){
-    offsetX += e.touches[0].clientX - lastTouches[0].clientX;
-    offsetY += e.touches[0].clientY - lastTouches[0].clientY;
+  if(e.touches.length===2 && startTouches.length===2){
+    const [a,b]=e.touches,[a0,b0]=startTouches;
+    scale *= Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY) /
+             Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
+  }else if(e.touches.length===1 && startTouches.length===1){
+    offsetX += e.touches[0].clientX - startTouches[0].clientX;
+    offsetY += e.touches[0].clientY - startTouches[0].clientY;
   }
-
-  lastTouches = [...e.touches];
+  startTouches = [...e.touches];
   draw();
 });
 
 canvas.addEventListener("touchend",e=>{
-  if(!moved && e.changedTouches.length===1){
-    const t = e.changedTouches[0];
-    const p = getPos(t.clientX,t.clientY);
-    const arr = refMode ? refPoints : points;
+  if(touchStartPos && e.changedTouches.length===1){
+    const t=e.changedTouches[0];
+    const dist=Math.hypot(t.clientX-touchStartPos.x,t.clientY-touchStartPos.y);
 
-    if(arr.length < 2){
-      arr.push(p);
-      applyVerticalSnap(arr);
-
-      if(refMode && refPoints.length===2){
-        refMode = false;
-        status.textContent =
-          "参照物設定完了。次に測定対象を指定してください。";
+    if(dist < 10){ // ✅ タップ判定
+      const p=getPos(t.clientX,t.clientY);
+      const arr=refMode?refPoints:points;
+      if(arr.length<2){
+        arr.push(p);
+        applyVerticalSnap(arr);
+        if(refMode && refPoints.length===2){
+          refMode=false;
+          status.textContent="参照物設定完了。次に測定対象。";
+        }
       }
+      draw();
     }
-    draw();
   }
-  lastTouches = [...e.touches];
+  startTouches=[];
+  touchStartPos=null;
 });
 
-/* ===== ボタン ===== */
-refBtn.onclick = ()=>{
-  refMode = true;
-  refPoints = [];
-  status.textContent = "参照物の上下2点を指定してください。";
+/* ボタン */
+refBtn.onclick=()=>{
+  refMode=true;
+  refPoints=[];
+  status.textContent="参照物の上下2点を指定してください。";
 };
 
-calcBtn.onclick = ()=>{
-  if(refPoints.length!==2 || points.length!==2){
-    result.innerHTML =
-      "<span class='ng'>参照物と測定対象を指定してください</span>";
+calcBtn.onclick=()=>{
+  if(refPoints.length!==2||points.length!==2){
+    result.innerHTML="<span class='ng'>点が足りません</span>";
     return;
   }
-
-  const refCm = Number(refLen.value);
-  if(!refCm || refCm<=0){
-    result.innerHTML =
-      "<span class='ng'>参照物の高さ(cm)を入力してください</span>";
-    return;
-  }
-
-  const h = Math.abs(points[1].y - points[0].y) /
-            Math.abs(refPoints[1].y - refPoints[0].y) *
-            refCm;
-
-  const distText = shootDist.value
-    ? `（撮影距離：約${shootDist.value} m）`
-    : "";
-
-  result.innerHTML = `
-    <span class="ok">
-      推定高さ ${h.toFixed(1)} cm<br>
-      <small>${distText}</small>
-    </span>`;
+  const refCm=Number(refLen.value);
+  const h=Math.abs(points[1].y-points[0].y)/
+          Math.abs(refPoints[1].y-refPoints[0].y)*refCm;
+  result.innerHTML=`<span class="ok">推定高さ ${h.toFixed(1)} cm</span>`;
 };
 
-/* ===== 画像読み込み ===== */
-fileInput.onchange = e=>{
-  const r = new FileReader();
-  r.onload = ()=>{
-    img.onload = ()=>{
-      scale = canvas.clientWidth / img.width;
-      offsetX = 0;
-      offsetY = (canvas.clientHeight - img.height*scale)/2;
+/* 画像 */
+fileInput.onchange=e=>{
+  const r=new FileReader();
+  r.onload=()=>{
+    img.onload=()=>{
+      scale=canvas.clientWidth/img.width;
+      offsetX=0;
+      offsetY=(canvas.clientHeight-img.height*scale)/2;
       draw();
     };
-    img.src = r.result;
+    img.src=r.result;
   };
   r.readAsDataURL(e.target.files[0]);
 };
