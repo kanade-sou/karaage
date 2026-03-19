@@ -47,14 +47,28 @@ input,select,button{
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
 
-  <!-- ✅ iPhone機種（17まで対応） -->
+  <!-- ✅ iPhone 機種選択（Pro / Max / 無印 分離） -->
   <select id="device">
     <option value="">📱 iPhone機種を選択</option>
-    <option value="ip17">iPhone 17 Pro / Pro Max</option>
-    <option value="ip16">iPhone 16 Pro / Pro Max</option>
-    <option value="ip15">iPhone 15 Pro / Pro Max</option>
-    <option value="ip14">iPhone 14 / 14 Pro</option>
-    <option value="ip13">iPhone 13 / 13 Pro</option>
+
+    <option value="ip17_pro">iPhone 17 Pro</option>
+    <option value="ip17_max">iPhone 17 Pro Max</option>
+    <option value="ip17">iPhone 17</option>
+
+    <option value="ip16_pro">iPhone 16 Pro</option>
+    <option value="ip16_max">iPhone 16 Pro Max</option>
+    <option value="ip16">iPhone 16</option>
+
+    <option value="ip15_pro">iPhone 15 Pro</option>
+    <option value="ip15_max">iPhone 15 Pro Max</option>
+    <option value="ip15">iPhone 15</option>
+
+    <option value="ip14_pro">iPhone 14 Pro</option>
+    <option value="ip14">iPhone 14</option>
+
+    <option value="ip13_pro">iPhone 13 Pro</option>
+    <option value="ip13">iPhone 13</option>
+
     <option value="ip12">iPhone 12</option>
     <option value="ipse">iPhone SE (第2・3世代)</option>
   </select>
@@ -84,13 +98,26 @@ let mode="ref";
 let draggingPoint=null;
 let spiral=null;
 
-/* ✅ iPhoneカメラDB（17まで対応） */
+/* ✅ iPhoneカメラDB（Pro / Max / 無印を個別管理） */
 const cameraDB={
+  ip17_pro:{f:6.86,sensor:7.6},
+  ip17_max:{f:6.86,sensor:7.6},
   ip17:{f:6.86,sensor:7.6},
+
+  ip16_pro:{f:6.86,sensor:7.6},
+  ip16_max:{f:6.86,sensor:7.6},
   ip16:{f:6.86,sensor:7.6},
+
+  ip15_pro:{f:6.86,sensor:7.6},
+  ip15_max:{f:6.86,sensor:7.6},
   ip15:{f:6.86,sensor:7.6},
+
+  ip14_pro:{f:6.86,sensor:7.6},
   ip14:{f:6.86,sensor:7.6},
+
+  ip13_pro:{f:5.7,sensor:7.6},
   ip13:{f:5.7,sensor:7.6},
+
   ip12:{f:4.25,sensor:7.6},
   ipse:{f:4.15,sensor:6.4}
 };
@@ -271,4 +298,3 @@ fileInput.onchange=e=>{
 
 </body>
 </html>
-``
