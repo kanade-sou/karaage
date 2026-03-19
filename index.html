@@ -2,12 +2,19 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>高さ推定ツール（スマホ完全版・安定）</title>
+<title>高さ推定ツール（スマホ完全安定・ズレなし版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <style>
-body{margin:0;font-family:system-ui,-apple-system,sans-serif;}
-header{padding:8px 12px;font-size:14px;background:#f3f4f6;}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,sans-serif;
+}
+header{
+  padding:8px 12px;
+  font-size:14px;
+  background:#f3f4f6;
+}
 canvas{
   display:block;
   width:100vw;
@@ -16,11 +23,20 @@ canvas{
   touch-action:none;
 }
 .panel{padding:10px;}
-button,input{width:100%;padding:10px;margin-top:6px;font-size:15px;}
+button,input{
+  width:100%;
+  padding:10px;
+  margin-top:6px;
+  font-size:15px;
+}
 .snap-option{
-  display:flex;align-items:center;gap:10px;
-  margin-top:8px;padding:10px;
-  background:#f9fafb;border-radius:6px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:8px;
+  padding:10px;
+  background:#f9fafb;
+  border-radius:6px;
 }
 .snap-option input{width:22px;height:22px;}
 .refbtn{background:#f59e0b;color:#fff;font-weight:bold;}
@@ -46,7 +62,7 @@ button,input{width:100%;padding:10px;margin-top:6px;font-size:15px;}
 
   <div class="snap-option">
     <input type="checkbox" id="snapVertical" checked>
-    <label for="snapVertical">垂直スナップ（上下点を完全に揃える）</label>
+    <label>垂直スナップ（上下点を完全に揃える）</label>
   </div>
 
   <button id="refBtn" class="refbtn">参照物を指定</button>
@@ -60,13 +76,13 @@ button,input{width:100%;padding:10px;margin-top:6px;font-size:15px;}
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-const snapCheckbox = document.getElementById("snapVertical");
+const snapVertical = document.getElementById("snapVertical");
 const status = document.getElementById("status");
 const result = document.getElementById("result");
 
 let img = new Image();
 
-/* ===== view状態 ===== */
+/* ===== 表示状態 ===== */
 let scale = 1;
 let offsetX = 0;
 let offsetY = 0;
@@ -81,13 +97,10 @@ let startTouches = [];
 let tapStart = null;
 let moved = false;
 
-/* ===== DPR安全canvas ===== */
+/* ===== canvasサイズ（論理座標のみ） ===== */
 function resize(){
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
+  canvas.width  = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
   draw();
 }
 window.addEventListener("resize", resize);
@@ -95,10 +108,8 @@ resize();
 
 /* ===== 描画 ===== */
 function draw(){
-  ctx.save();
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.restore();
 
   ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
   ctx.drawImage(img,0,0);
@@ -118,11 +129,8 @@ function drawLine(arr,color){
   }
 }
 
-/* ===== 座標変換（ズレ防止の核心） ===== */
-function screenToWorld(clientX, clientY){
-  const rect = canvas.getBoundingClientRect();
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
+/* ===== 座標変換（完全一致） ===== */
+function screenToWorld(x,y){
   return {
     x:(x - offsetX) / scale,
     y:(y - offsetY) / scale
@@ -131,7 +139,7 @@ function screenToWorld(clientX, clientY){
 
 /* ===== 垂直スナップ ===== */
 function applyVerticalSnap(arr){
-  if(arr.length===2 && snapCheckbox.checked){
+  if(arr.length===2 && snapVertical.checked){
     arr[1].x = arr[0].x;
   }
 }
@@ -150,13 +158,16 @@ canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
   moved=true;
 
+  /* --- ピンチズーム（中心固定・決定版） --- */
   if(e.touches.length===2 && startTouches.length===2){
     const [a,b]=e.touches;
     const [a0,b0]=startTouches;
 
     const cx=(a.clientX+b.clientX)/2;
     const cy=(a.clientY+b.clientY)/2;
-    const before=screenToWorld(cx,cy);
+
+    const wx=(cx-offsetX)/scale;
+    const wy=(cy-offsetY)/scale;
 
     const d0=Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
     const d1=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
@@ -164,11 +175,11 @@ canvas.addEventListener("touchmove",e=>{
     scale*=d1/d0;
     scale=Math.min(Math.max(scale,0.2),10);
 
-    const after=screenToWorld(cx,cy);
-    offsetX+=(after.x-before.x)*scale;
-    offsetY+=(after.y-before.y)*scale;
+    offsetX=cx-wx*scale;
+    offsetY=cy-wy*scale;
   }
 
+  /* --- 移動 --- */
   if(e.touches.length===1 && startTouches.length===1){
     offsetX+=e.touches[0].clientX-startTouches[0].clientX;
     offsetY+=e.touches[0].clientY-startTouches[0].clientY;
@@ -237,3 +248,4 @@ fileInput.onchange=e=>{
 </script>
 </body>
 </html>
+``
