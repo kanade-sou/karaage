@@ -2,14 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>高さ推定ツール（スマホ完全対応版）</title>
+<title>高さ推定ツール（スマホ完全対応・最終版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <style>
 body{
   margin:0;
   font-family:system-ui,-apple-system,sans-serif;
-  background:#fff;
 }
 header{
   padding:8px 12px;
@@ -32,28 +31,10 @@ button,input{
   margin-top:6px;
   font-size:15px;
 }
+.refbtn{background:#f59e0b;color:#fff;font-weight:bold;}
+.primary{background:#2563eb;color:#fff;font-weight:bold;}
 .ok{color:#16a34a;}
 .ng{color:#dc2626;}
-
-/* 初回ガイド */
-#guide{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.75);
-  color:#fff;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:1000;
-}
-#guide.active{display:flex;}
-#guide .box{
-  background:#111;
-  padding:20px;
-  border-radius:12px;
-  max-width:90%;
-  text-align:center;
-}
 </style>
 </head>
 
@@ -61,7 +42,7 @@ button,input{
 
 <header>
 ①参照物 → ②測定対象 → ③計算  
-（ピンチで拡大・1本指で移動）
+（ピンチで拡大／1本指で移動）
 </header>
 
 <canvas id="canvas"></canvas>
@@ -69,28 +50,17 @@ button,input{
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
   <input type="number" id="refLen" value="100" placeholder="参照物の高さ（cm）">
-  <button id="refBtn">参照物を指定</button>
-  <button id="calcBtn">計算</button>
+  <button id="refBtn" class="refbtn">参照物を指定</button>
+  <button id="calcBtn" class="primary">計算</button>
+  <div id="status"></div>
   <div id="result"></div>
-</div>
-
-<div id="guide">
-  <div class="box">
-    <h3>使い方</h3>
-    <p>
-      ・写真はピンチで拡大できます<br>
-      ・1本指で移動できます<br>
-      ・上下2点をタップします
-    </p>
-    <p style="opacity:.7">タップして開始</p>
-  </div>
 </div>
 
 <script>
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+const status = document.getElementById("status");
 const result = document.getElementById("result");
-const guide = document.getElementById("guide");
 
 let img = new Image();
 let scale = 1;
@@ -101,9 +71,9 @@ let points = [];
 let refPoints = [];
 let refMode = false;
 
-let prevTouches = [];
+let lastTouches = [];
 
-/* DPR対応 */
+/* ===== DPR対応 ===== */
 function resize(){
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -115,15 +85,17 @@ function resize(){
 window.addEventListener("resize", resize);
 resize();
 
-/* 描画 */
+/* ===== 描画 ===== */
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
   ctx.drawImage(img,0,0);
+
   drawLine(refPoints,"orange");
   drawLine(points,"red");
 }
+
 function drawLine(arr,color){
   if(arr.length===2){
     ctx.strokeStyle=color;
@@ -135,7 +107,7 @@ function drawLine(arr,color){
   }
 }
 
-/* 座標変換 */
+/* ===== 座標変換 ===== */
 function getPos(x,y){
   return {
     x:(x-offsetX)/scale,
@@ -143,84 +115,89 @@ function getPos(x,y){
   };
 }
 
-/* タッチ操作 */
+/* ===== タッチ操作 ===== */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
-  prevTouches = [...e.touches];
+  lastTouches = [...e.touches];
 });
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
-  if(e.touches.length===2 && prevTouches.length===2){
+
+  if(e.touches.length===2 && lastTouches.length===2){
     const [a,b] = e.touches;
-    const [a0,b0] = prevTouches;
+    const [a0,b0] = lastTouches;
     const d0 = Math.hypot(a0.clientX-b0.clientX,a0.clientY-b0.clientY);
     const d1 = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
     scale *= d1/d0;
-  }else if(e.touches.length===1 && prevTouches.length===1){
-    offsetX += e.touches[0].clientX - prevTouches[0].clientX;
-    offsetY += e.touches[0].clientY - prevTouches[0].clientY;
+  }else if(e.touches.length===1 && lastTouches.length===1){
+    offsetX += e.touches[0].clientX - lastTouches[0].clientX;
+    offsetY += e.touches[0].clientY - lastTouches[0].clientY;
   }
-  prevTouches = [...e.touches];
+
+  lastTouches = [...e.touches];
   draw();
 });
 
 canvas.addEventListener("touchend",e=>{
-  if(e.changedTouches.length===1 && prevTouches.length===0){
+  if(e.changedTouches.length===1 && lastTouches.length===0){
     const t = e.changedTouches[0];
     const p = getPos(t.clientX,t.clientY);
     const arr = refMode ? refPoints : points;
-    if(arr.length<2){
+
+    if(arr.length < 2){
       arr.push(p);
+
       if(refMode && refPoints.length===2){
-        refMode=false;
+        refMode = false;
+        status.textContent = "参照物設定完了。次に測定対象を指定してください。";
       }
     }
     draw();
   }
-  prevTouches = [...e.touches];
+  lastTouches = [...e.touches];
 });
 
-/* ボタン */
-refBtn.onclick=()=>{
-  refMode=true;
-  refPoints=[];
-};
-calcBtn.onclick=()=>{
-  if(refPoints.length!==2||points.length!==2){
-    result.innerHTML="<span class='ng'>点が足りません</span>";
-    return;
-  }
-  const refCm = Number(refLen.value);
-  const h = Math.abs(points[1].y-points[0].y) /
-            Math.abs(refPoints[1].y-refPoints[0].y) *
-            refCm;
-  result.innerHTML=`<span class='ok'>推定高さ ${h.toFixed(1)} cm</span>`;
+/* ===== ボタン ===== */
+refBtn.onclick = ()=>{
+  refMode = true;
+  refPoints = [];
+  status.textContent = "参照物の上下2点を指定してください。";
 };
 
-/* 画像 */
-fileInput.onchange=e=>{
+calcBtn.onclick = ()=>{
+  if(refPoints.length!==2 || points.length!==2){
+    result.innerHTML = "<span class='ng'>参照物と測定対象を指定してください</span>";
+    return;
+  }
+
+  const refCm = Number(refLen.value);
+  if(!refCm || refCm<=0){
+    result.innerHTML = "<span class='ng'>参照物の高さ(cm)を入力してください</span>";
+    return;
+  }
+
+  const h = Math.abs(points[1].y - points[0].y) /
+            Math.abs(refPoints[1].y - refPoints[0].y) *
+            refCm;
+
+  result.innerHTML = `<span class="ok">推定高さ ${h.toFixed(1)} cm</span>`;
+};
+
+/* ===== 画像読み込み ===== */
+fileInput.onchange = e=>{
   const r = new FileReader();
-  r.onload=()=>{
-    img.onload=()=>{
+  r.onload = ()=>{
+    img.onload = ()=>{
       scale = canvas.clientWidth / img.width;
       offsetX = 0;
       offsetY = (canvas.clientHeight - img.height*scale)/2;
       draw();
     };
-    img.src=r.result;
+    img.src = r.result;
   };
   r.readAsDataURL(e.target.files[0]);
 };
-
-/* 初回ガイド */
-if(!localStorage.getItem("heightToolGuide")){
-  guide.classList.add("active");
-  guide.onclick=()=>{
-    guide.classList.remove("active");
-    localStorage.setItem("heightToolGuide","1");
-  };
-}
 </script>
 
 </body>
