@@ -29,7 +29,9 @@ input,select,button{
 }
 .ref{background:#f59e0b;color:#fff;font-weight:bold;}
 .calc{background:#dc2626;color:#fff;font-weight:bold;}
+.reset{background:#6b7280;color:#fff;font-weight:bold;}
 .ok{color:#16a34a;font-weight:bold;}
+.ng{color:#dc2626;font-weight:bold;}
 .guide{font-size:13px;color:#374151;margin-top:6px;}
 </style>
 </head>
@@ -37,7 +39,7 @@ input,select,button{
 <body>
 
 <header>
-📱 スマホ完結｜ケーブル地上高測定（±5%目標）
+📱 スマホ完結｜ケーブル地上高測定ツール
 </header>
 
 <canvas id="canvas"></canvas>
@@ -45,6 +47,7 @@ input,select,button{
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
 
+  <!-- iPhone機種選択 -->
   <select id="device">
     <option value="">📱 iPhone機種を選択</option>
     <option value="ip15">iPhone 15 Pro / Pro Max</option>
@@ -56,14 +59,14 @@ input,select,button{
 
   <input type="number" id="shootDist" placeholder="📏 撮影距離（m）">
   <input type="number" id="refHeight" placeholder="📐 参照物の高さ（m）">
-  <input type="number" id="refDist" placeholder="📐 参照物までの距離（m）">
 
   <button id="refBtn" class="ref">🟠 参照物を指定</button>
   <button id="calcBtn" class="calc">🔴 高さを計算</button>
+  <button id="resetBtn" class="reset">↺ リセット</button>
 
   <div id="result"></div>
   <div class="guide">
-    ※ 参照物→ケーブルの順に上下2点をタップしてください
+    ① 参照物を上下2点タップ → ② ケーブルを上下2点タップ
   </div>
 </div>
 
@@ -77,7 +80,7 @@ let refPoints=[], cablePoints=[];
 let refMode=false;
 let spiral=null;
 
-/* ✅ iPhoneカメラDB（実測ベース） */
+/* iPhoneカメラデータ */
 const cameraDB={
   ip15:{f:6.86,sensor:7.6},
   ip14:{f:6.86,sensor:7.6},
@@ -94,16 +97,16 @@ function resize(){
 window.addEventListener("resize",resize);
 resize();
 
-/* ===== 描画 ===== */
+/* 描画 */
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
+
   ctx.setTransform(scale,0,0,scale,offsetX,offsetY);
   ctx.drawImage(img,0,0);
 
   drawLine(refPoints,"#f59e0b");
   drawLine(cablePoints,"#dc2626");
-
   drawSpiral();
 }
 
@@ -118,7 +121,7 @@ function drawLine(arr,color){
   }
 }
 
-/* ✅ らせん演出 */
+/* らせん演出 */
 function drawSpiral(){
   if(!spiral) return;
   const {x,y,t,color}=spiral;
@@ -127,10 +130,7 @@ function drawSpiral(){
   ctx.beginPath();
   for(let a=0;a<t;a+=0.2){
     const r=4*a;
-    ctx.lineTo(
-      x+r*Math.cos(a),
-      y+r*Math.sin(a)
-    );
+    ctx.lineTo(x+r*Math.cos(a), y+r*Math.sin(a));
   }
   ctx.stroke();
   spiral.t+=0.4;
@@ -138,7 +138,6 @@ function drawSpiral(){
   else spiral=null;
 }
 
-/* 座標 */
 function screenToWorld(x,y){
   return {x:(x-offsetX)/scale,y:(y-offsetY)/scale};
 }
@@ -155,21 +154,23 @@ canvas.addEventListener("touchend",e=>{
   }
 });
 
-/* ボタン */
+/* 参照物指定 */
 refBtn.onclick=()=>{
   refMode=true;
   refPoints=[];
+  cablePoints=[];
+  result.textContent="";
 };
 
+/* 計算 */
 calcBtn.onclick=()=>{
   const dev=device.value;
   if(!dev||refPoints.length!==2||cablePoints.length!==2){
-    result.innerHTML="<span class='ng'>入力が不足しています</span>";
+    result.innerHTML="<span class='ng'>入力または指定が不足しています</span>";
     return;
   }
 
   const D=Number(shootDist.value);
-  const Dr=Number(refDist.value);
   const Hr=Number(refHeight.value);
 
   const cam=cameraDB[dev];
@@ -178,14 +179,26 @@ calcBtn.onclick=()=>{
   const href=Math.abs(refPoints[1].y-refPoints[0].y);
   const hc=Math.abs(cablePoints[1].y-cablePoints[0].y);
 
-  const Hc=(hc*D)/fpx;
-  const HrCalc=(href*Dr)/fpx;
-  const H=Hc*(Hr/HrCalc);
+  const scaleCorr=Hr/(href/fpx*D);
+  const H=hc/fpx*D*scaleCorr;
 
-  result.innerHTML=`<span class="ok">✅ ケーブル地上高：${H.toFixed(2)} m（±5%）</span>`;
+  result.innerHTML=`<span class="ok">✅ ケーブル地上高：${H.toFixed(2)} m</span>`;
 };
 
-/* 画像 */
+/* リセット */
+resetBtn.onclick=()=>{
+  img.src="";
+  refPoints=[];
+  cablePoints=[];
+  refMode=false;
+  scale=1;
+  offsetX=0;
+  offsetY=0;
+  result.textContent="";
+  draw();
+};
+
+/* 画像読み込み */
 fileInput.onchange=e=>{
   const r=new FileReader();
   r.onload=()=>{
