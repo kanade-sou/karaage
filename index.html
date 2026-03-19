@@ -47,8 +47,11 @@ input,select,button{
 <div class="panel">
   <input type="file" id="fileInput" accept="image/*">
 
+  <!-- ✅ iPhone機種（17まで対応） -->
   <select id="device">
     <option value="">📱 iPhone機種を選択</option>
+    <option value="ip17">iPhone 17 Pro / Pro Max</option>
+    <option value="ip16">iPhone 16 Pro / Pro Max</option>
     <option value="ip15">iPhone 15 Pro / Pro Max</option>
     <option value="ip14">iPhone 14 / 14 Pro</option>
     <option value="ip13">iPhone 13 / 13 Pro</option>
@@ -65,7 +68,7 @@ input,select,button{
 
   <div id="result"></div>
   <div class="guide">
-    ①参照物→②ケーブルを上下2点指定（点はドラッグ可）
+    ①参照物 → ②ケーブルを上下2点タップ（点はドラッグ可）
   </div>
 </div>
 
@@ -77,12 +80,14 @@ let img=new Image();
 let scale=1,offsetX=0,offsetY=0;
 
 let refPoints=[], cablePoints=[];
-let mode="ref"; // "ref" or "cable"
+let mode="ref";
 let draggingPoint=null;
 let spiral=null;
 
-/* iPhoneカメラDB */
+/* ✅ iPhoneカメラDB（17まで対応） */
 const cameraDB={
+  ip17:{f:6.86,sensor:7.6},
+  ip16:{f:6.86,sensor:7.6},
   ip15:{f:6.86,sensor:7.6},
   ip14:{f:6.86,sensor:7.6},
   ip13:{f:5.7,sensor:7.6},
@@ -137,7 +142,7 @@ function drawPoints(arr,color){
   });
 }
 
-/* ===== らせん ===== */
+/* らせん演出 */
 function drawSpiral(){
   if(!spiral) return;
   const {x,y,t,color}=spiral;
@@ -154,18 +159,17 @@ function drawSpiral(){
   else spiral=null;
 }
 
-/* ===== 座標変換 ===== */
+/* 座標変換 */
 function screenToWorld(x,y){
   return {x:(x-offsetX)/scale,y:(y-offsetY)/scale};
 }
 
-/* ===== 点ヒット判定（スクリーン座標） ===== */
+/* 点ヒット判定 */
 function hitTest(clientX,clientY){
   const rect=canvas.getBoundingClientRect();
   const sx=clientX-rect.left;
   const sy=clientY-rect.top;
   const r=15;
-
   for(const p of [...refPoints,...cablePoints]){
     const px=p.x*scale+offsetX;
     const py=p.y*scale+offsetY;
@@ -174,7 +178,7 @@ function hitTest(clientX,clientY){
   return null;
 }
 
-/* ===== タッチ操作 ===== */
+/* タッチ */
 canvas.addEventListener("touchstart",e=>{
   e.preventDefault();
   const t=e.touches[0];
@@ -183,26 +187,11 @@ canvas.addEventListener("touchstart",e=>{
 
 canvas.addEventListener("touchmove",e=>{
   e.preventDefault();
-
   if(draggingPoint && e.touches.length===1){
     const t=e.touches[0];
     const p=screenToWorld(t.clientX,t.clientY);
     draggingPoint.x=p.x;
     draggingPoint.y=p.y;
-    draw();
-    return;
-  }
-
-  if(e.touches.length===2){
-    const [a,b]=e.touches;
-    const cx=(a.clientX+b.clientX)/2;
-    const cy=(a.clientY+b.clientY)/2;
-    const wx=(cx-offsetX)/scale;
-    const wy=(cy-offsetY)/scale;
-    scale*=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/
-           Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
-    offsetX=cx-wx*scale;
-    offsetY=cy-wy*scale;
     draw();
   }
 },{passive:false});
@@ -222,7 +211,7 @@ canvas.addEventListener("touchend",e=>{
   draggingPoint=null;
 });
 
-/* ===== ボタン ===== */
+/* ボタン */
 refBtn.onclick=()=>{
   mode="ref";
   refPoints=[];
@@ -264,7 +253,7 @@ resetBtn.onclick=()=>{
   draw();
 };
 
-/* ===== 画像 ===== */
+/* 画像 */
 fileInput.onchange=e=>{
   const r=new FileReader();
   r.onload=()=>{
@@ -282,3 +271,4 @@ fileInput.onchange=e=>{
 
 </body>
 </html>
+``
